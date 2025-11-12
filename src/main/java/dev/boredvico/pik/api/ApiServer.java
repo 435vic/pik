@@ -1,5 +1,10 @@
 package dev.boredvico.pik.api;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParseException;
+import com.google.gson.JsonParser;
+import dev.boredvico.pik.Pik;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
@@ -8,20 +13,12 @@ import io.netty.channel.epoll.*;
 import io.netty.channel.unix.DomainSocketAddress;
 import io.netty.handler.codec.http.*;
 import io.netty.util.CharsetUtil;
-import net.minecraft.server.MinecraftServer;
-
-import com.google.gson.Gson;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParseException;
-import com.google.gson.JsonParser;
-
-import dev.boredvico.pik.Pik;
-
 import java.nio.file.*;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import net.minecraft.server.MinecraftServer;
 
 /**
  * Lightweight abstraction of Netty, creates an Express-like interface for implementing
@@ -29,6 +26,7 @@ import java.util.regex.Pattern;
  * Designed to be put behind a reverse proxy for security.
  */
 public class ApiServer {
+
     private EventLoopGroup bossGroup;
     private Channel channel;
     private final String socketPath;
@@ -36,19 +34,28 @@ public class ApiServer {
     private final Gson gson;
     private final MinecraftServer mcInstance;
 
-    public ApiServer(String socketPath, MinecraftServer mcInstance, String prefix, Gson gson) {
-	this.gson = gson;
+    public ApiServer(
+        String socketPath,
+        MinecraftServer mcInstance,
+        String prefix,
+        Gson gson
+    ) {
+        this.gson = gson;
         this.socketPath = socketPath;
         this.router = new Router(prefix);
-	this.mcInstance = mcInstance;
+        this.mcInstance = mcInstance;
     }
 
-    public ApiServer(String socketPath, MinecraftServer mcInstance, String prefix) {
-	this(socketPath, mcInstance, prefix, new Gson());
+    public ApiServer(
+        String socketPath,
+        MinecraftServer mcInstance,
+        String prefix
+    ) {
+        this(socketPath, mcInstance, prefix, new Gson());
     }
 
     public ApiServer(String socketPath, MinecraftServer mcInstance) {
-	this(socketPath, mcInstance, "", new Gson());
+        this(socketPath, mcInstance, "", new Gson());
     }
 
     public Router getRouter() {
@@ -56,9 +63,11 @@ public class ApiServer {
     }
 
     public void start() throws Exception {
-	Pik.LOGGER.info("Starting API server...");
+        Pik.LOGGER.info("Starting API server...");
         if (!Epoll.isAvailable()) {
-            throw new UnsupportedOperationException("Unix Sockets not available.");
+            throw new UnsupportedOperationException(
+                "Unix Sockets not available."
+            );
         }
 
         this.bossGroup = new EpollEventLoopGroup(1);
@@ -69,21 +78,31 @@ public class ApiServer {
         ServerBootstrap bootstrap = new ServerBootstrap()
             .group(bossGroup)
             .channel(EpollServerDomainSocketChannel.class)
-            .childHandler(new ChannelInitializer<Channel>() {
-                @Override
-                protected void initChannel(Channel ch) {
-                    ch.pipeline()
-                        .addLast(new HttpServerCodec())
-                        .addLast(new HttpObjectAggregator(1048576)) // 1MB max
-                        .addLast(new HttpApiHandler(router, gson, mcInstance));
+            .childHandler(
+                new ChannelInitializer<Channel>() {
+                    @Override
+                    protected void initChannel(Channel ch) {
+                        ch
+                            .pipeline()
+                            .addLast(new HttpServerCodec())
+                            .addLast(new HttpObjectAggregator(1048576)) // 1MB max
+                            .addLast(
+                                new HttpApiHandler(router, gson, mcInstance)
+                            );
+                    }
                 }
-            });
+            );
 
-        channel = bootstrap.bind(new DomainSocketAddress(socketPath)).sync().channel();
+        channel = bootstrap
+            .bind(new DomainSocketAddress(socketPath))
+            .sync()
+            .channel();
 
         // Set socket permissions (owner+group read/write only)
-        Files.setPosixFilePermissions(Paths.get(socketPath),
-            PosixFilePermissions.fromString("rw-rw----"));
+        Files.setPosixFilePermissions(
+            Paths.get(socketPath),
+            PosixFilePermissions.fromString("rw-rw----")
+        );
 
         Pik.LOGGER.info("API server listening on " + socketPath);
     }
@@ -107,16 +126,17 @@ public class ApiServer {
      * Supports path parameters like /players/:name
      */
     public static class Router {
+
         private final List<Route> routes = new ArrayList<>();
-	private final String prefix;
+        private final String prefix;
 
-	public Router() {
-	    this.prefix = "";
-	}
+        public Router() {
+            this.prefix = "";
+        }
 
-	public Router(String prefix) {
-	    this.prefix = prefix;
-	}
+        public Router(String prefix) {
+            this.prefix = prefix;
+        }
 
         public Router get(String path, RouteHandler handler) {
             routes.add(new Route(prefix, HttpMethod.GET, path, handler));
@@ -154,26 +174,34 @@ public class ApiServer {
         }
 
         private static class Route {
+
             private final HttpMethod method;
             private final Pattern pattern;
             private final List<String> paramNames;
             private final RouteHandler handler;
 
-            Route(String prefix, HttpMethod method, String path, RouteHandler handler) {
+            Route(
+                String prefix,
+                HttpMethod method,
+                String path,
+                RouteHandler handler
+            ) {
                 this.method = method;
                 this.handler = handler;
                 this.paramNames = new ArrayList<>();
 
                 // Convert /path/:param/:other to regex
                 String regex = prefix + path;
-                Pattern paramPattern = Pattern.compile(":([a-zA-Z][a-zA-Z0-9_]*)");
+                Pattern paramPattern = Pattern.compile(
+                    ":([a-zA-Z][a-zA-Z0-9_]*)"
+                );
                 Matcher matcher = paramPattern.matcher(path);
-                
+
                 while (matcher.find()) {
                     paramNames.add(matcher.group(1));
                     regex = regex.replace(":" + matcher.group(1), "([^/]+)");
                 }
-                
+
                 this.pattern = Pattern.compile("^" + regex + "$");
             }
 
@@ -198,6 +226,7 @@ public class ApiServer {
     }
 
     public static class RouteMatch {
+
         final RouteHandler handler;
         final Map<String, String> pathParams;
 
@@ -211,29 +240,39 @@ public class ApiServer {
      * Context object passed to route handlers with request data and response methods.
      */
     public static class Context {
-	// internal context
-	public final Gson gson;
-	private final MinecraftServer mcInstance;
-	private final ChannelHandlerContext netCtx;
 
-	// request context
+        // internal context
+        public final Gson gson;
+        private final MinecraftServer mcInstance;
+        private final ChannelHandlerContext netCtx;
+
+        // request context
         private final FullHttpRequest request;
         private final Map<String, String> pathParams;
         private final Map<String, String> queryParams;
 
-	// response context
+        // response context
         private Object responseBody;
         private HttpResponseStatus status = HttpResponseStatus.OK;
         private final Map<String, String> responseHeaders = new HashMap<>();
 
-        Context(ChannelHandlerContext netCtx, FullHttpRequest request, Map<String, String> pathParams, Gson gson, MinecraftServer instance) {
-	    this.gson = gson;
-	    this.netCtx = netCtx;
+        Context(
+            ChannelHandlerContext netCtx,
+            FullHttpRequest request,
+            Map<String, String> pathParams,
+            Gson gson,
+            MinecraftServer instance
+        ) {
+            this.gson = gson;
+            this.netCtx = netCtx;
             this.request = request;
-	    this.mcInstance = instance;
+            this.mcInstance = instance;
             this.pathParams = pathParams;
             this.queryParams = parseQueryParams(request.uri());
-            responseHeaders.put(HttpHeaderNames.CONTENT_TYPE.toString(), "application/json");
+            responseHeaders.put(
+                HttpHeaderNames.CONTENT_TYPE.toString(),
+                "application/json"
+            );
         }
 
         public String pathParam(String name) {
@@ -264,24 +303,31 @@ public class ApiServer {
             return JsonParser.parseString(body()).getAsJsonObject();
         }
 
-	public MinecraftServer getMinecraft() {
-	    return mcInstance;
-	}
+        public MinecraftServer getMinecraft() {
+            return mcInstance;
+        }
 
         public void json(Object obj) {
             this.responseBody = obj;
-	    this.send();
+            this.send();
         }
 
-	public void send() {
-	    Object body = this.responseBody;
-	    if (status == HttpResponseStatus.NO_CONTENT) {
-		body = null;
-	    } else if (body == null && status.code() < 300) {
-		body = Map.of("success", true);
-	    }
-	    HttpApiHandler.sendResponse(netCtx, status, responseBody, responseHeaders, gson);
-	}
+        public void send() {
+            Object body = this.responseBody;
+            if (status == HttpResponseStatus.NO_CONTENT) {
+                body = null;
+            } else if (body == null && status.code() < 300) {
+                body = Map.of("success", true);
+            }
+            HttpApiHandler.sendResponse(
+                netCtx,
+                status,
+                responseBody,
+                responseHeaders,
+                gson,
+                false
+            );
+        }
 
         public Context status(int code) {
             this.status = HttpResponseStatus.valueOf(code);
@@ -338,81 +384,125 @@ public class ApiServer {
     /**
      * Netty handler that processes HTTP requests and routes them.
      */
-    private static class HttpApiHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
+    private static class HttpApiHandler
+        extends SimpleChannelInboundHandler<FullHttpRequest> {
+
         private final Router router;
-	private final Gson gson;
-	private final MinecraftServer mcInstance;
+        private final Gson gson;
+        private final MinecraftServer mcInstance;
 
         HttpApiHandler(Router router, Gson gson, MinecraftServer instance) {
-	    this.mcInstance = instance;
+            this.mcInstance = instance;
             this.router = router;
-	    this.gson = gson;
+            this.gson = gson;
         }
 
         @Override
-        protected void channelRead0(ChannelHandlerContext ctx, FullHttpRequest request) {
+        protected void channelRead0(
+            ChannelHandlerContext ctx,
+            FullHttpRequest request
+        ) {
             String path = request.uri().split("\\?")[0]; // Remove query string
             RouteMatch match = router.match(request.method(), path);
 
             if (match == null) {
-                HttpApiHandler.sendResponse(ctx, HttpResponseStatus.NOT_FOUND,
-                    Map.of("error", "Not found", "path", path), Map.of(), gson);
+                HttpApiHandler.sendResponse(
+                    ctx,
+                    HttpResponseStatus.NOT_FOUND,
+                    Map.of("error", "Not found", "path", path),
+                    Map.of(),
+                    gson,
+                    false
+                );
                 return;
             }
 
-	    Context context = new Context(ctx, request, match.pathParams, gson, mcInstance);
+            Context context = new Context(
+                ctx,
+                request,
+                match.pathParams,
+                gson,
+                mcInstance
+            );
             try {
                 match.handler.handle(context);
             } catch (Exception e) {
                 e.printStackTrace();
-		HttpApiHandler.sendResponse(ctx, HttpResponseStatus.INTERNAL_SERVER_ERROR,
-		    Map.of("error", "internal server error", "path", path), Map.of(), gson);
+                HttpApiHandler.sendResponse(
+                    ctx,
+                    HttpResponseStatus.INTERNAL_SERVER_ERROR,
+                    Map.of("error", "internal server error", "path", path),
+                    Map.of(),
+                    gson,
+                    false
+                );
             }
         }
 
         @Override
-        public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
+        public void exceptionCaught(
+            ChannelHandlerContext ctx,
+            Throwable cause
+        ) {
             cause.printStackTrace();
             ctx.close();
         }
 
-	public static void sendResponse(
-		ChannelHandlerContext ctx,
-		HttpResponseStatus status,
-		Object body,
-		Map<String, String> headers,
-		Gson gson,
-		boolean keepAlive
-	) {
-	    ByteBuf buffer = Unpooled.EMPTY_BUFFER;	
-	    int bufferLen = 0;
+        public static void sendResponse(
+            ChannelHandlerContext ctx,
+            HttpResponseStatus status,
+            Object body,
+            Map<String, String> headers,
+            Gson gson,
+            boolean keepAlive
+        ) {
+            ByteBuf buffer = Unpooled.EMPTY_BUFFER;
+            int bufferLen = 0;
 
-	    if (body != null) {
-		String json = body instanceof String ? (String) body : gson.toJson(body);
-		byte[] bytes = json.getBytes(CharsetUtil.UTF_8);
-		bufferLen = bytes.length;
-		buffer = Unpooled.wrappedBuffer(bytes);
-	    } 
+            if (body != null) {
+                String json = body instanceof String
+                    ? (String) body
+                    : gson.toJson(body);
+                byte[] bytes = json.getBytes(CharsetUtil.UTF_8);
+                bufferLen = bytes.length;
+                buffer = Unpooled.wrappedBuffer(bytes);
+            }
 
             FullHttpResponse response = new DefaultFullHttpResponse(
-                HttpVersion.HTTP_1_1, status, buffer);
+                HttpVersion.HTTP_1_1,
+                status,
+                buffer
+            );
 
             response.headers().set(HttpHeaderNames.CONTENT_LENGTH, bufferLen);
-	    response.headers().set(
-		HttpHeaderNames.CONNECTION,
-		keepAlive ? HttpHeaderValues.KEEP_ALIVE : HttpHeaderValues.CLOSE
-	    );
-            
-            // Set default content-type if not provided
-            if (bufferLen != 0 && !headers.containsKey(HttpHeaderNames.CONTENT_TYPE.toString())) {
-                response.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json");
-            }
-            
-            // Add custom headers
-            headers.forEach((name, value) -> response.headers().set(name, value));
+            response
+                .headers()
+                .set(
+                    HttpHeaderNames.CONNECTION,
+                    keepAlive
+                        ? HttpHeaderValues.KEEP_ALIVE
+                        : HttpHeaderValues.CLOSE
+                );
 
-            ctx.writeAndFlush(response).addListener(ChannelFutureListener.CLOSE);
-	}
+            // Set default content-type if not provided
+            if (
+                bufferLen != 0 &&
+                !headers.containsKey(HttpHeaderNames.CONTENT_TYPE.toString())
+            ) {
+                response
+                    .headers()
+                    .set(HttpHeaderNames.CONTENT_TYPE, "application/json");
+            }
+
+            // Add custom headers
+            headers.forEach((name, value) ->
+                response.headers().set(name, value)
+            );
+
+            ctx
+                .writeAndFlush(response)
+                .addListener(ChannelFutureListener.CLOSE);
+        }
     }
 
     // // Example usage in a Fabric mod

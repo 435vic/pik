@@ -1,0 +1,17 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "dev.boredvico.pik.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [],
+  "server": [
+    "PlayerManagerMixin",
+    "ServerLoginPacketListenerImplMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "overwrites": {
+    "requireAnnotations": true
+  }
+}
