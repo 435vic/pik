@@ -6,6 +6,7 @@ classes/
 
 # direnv / nix
 .direnv
+.envrc
 result
 
 # Quilt Loom
