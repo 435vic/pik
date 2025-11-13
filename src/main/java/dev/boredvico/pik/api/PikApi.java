@@ -24,8 +24,8 @@ public class PikApi {
 		ctx.json(Map.of("status", "ok"));
 	    })
 	    .post("/chat", PikApi::postChat)
-	    .post("/whitelist", PikApi::addWhitelist)
-	    .delete("/whitelist", PikApi::removeWhitelist)
+	    .post("/whitelist/:uuid", PikApi::addWhitelist)
+	    .delete("/whitelist/:uuid", PikApi::removeWhitelist)
 	    .get("/otp/:code", PikApi::checkOtp);
     }
 

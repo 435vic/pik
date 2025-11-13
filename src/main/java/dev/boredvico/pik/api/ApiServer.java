@@ -16,9 +16,11 @@ import io.netty.util.CharsetUtil;
 import java.nio.file.*;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.*;
+import java.util.concurrent.ThreadFactory;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import net.minecraft.server.MinecraftServer;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 /**
  * Lightweight abstraction of Netty, creates an Express-like interface for implementing
@@ -70,7 +72,11 @@ public class ApiServer {
             );
         }
 
-        this.bossGroup = new EpollEventLoopGroup(1);
+        ThreadFactory threadFactory = new ThreadFactoryBuilder()
+            .setNameFormat("Pik-API-Boss-%d")
+            .setDaemon(true)
+            .build();
+        this.bossGroup = new EpollEventLoopGroup(1, threadFactory);
 
         // Delete existing socket if present
         Files.deleteIfExists(Paths.get(socketPath));
@@ -108,6 +114,7 @@ public class ApiServer {
     }
 
     public void stop() {
+        Pik.LOGGER.info("Shutting down API server...");
         if (channel != null) {
             channel.close();
         }
@@ -119,6 +126,7 @@ public class ApiServer {
         } catch (Exception e) {
             e.printStackTrace();
         }
+        Pik.LOGGER.info("API server stopped. bye bye");
     }
 
     /**
@@ -402,7 +410,23 @@ public class ApiServer {
             ChannelHandlerContext ctx,
             FullHttpRequest request
         ) {
-            String path = request.uri().split("\\?")[0]; // Remove query string
+            String rawUri = request.uri();
+            String path;
+            
+            try {
+                path = new java.net.URI(rawUri).getPath();
+            } catch (java.net.URISyntaxException e) {
+                HttpApiHandler.sendResponse(
+                    ctx, 
+                    HttpResponseStatus.BAD_REQUEST, 
+                    Map.of(), 
+                    Map.of(), 
+                    gson, 
+                    false
+                );
+                return;
+            }
+
             RouteMatch match = router.match(request.method(), path);
 
             if (match == null) {

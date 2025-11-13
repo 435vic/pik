@@ -17,6 +17,11 @@ public class RedactedWhitelistComponent implements Component {
 	}
 
 	@Override
+	public String getString() {
+	    return "not whitelisted";
+	}
+
+	@Override
 	public Style getStyle() {
 		return wrapped.getStyle();
 	}

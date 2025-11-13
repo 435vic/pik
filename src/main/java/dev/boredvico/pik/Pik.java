@@ -45,5 +45,10 @@ public class Pik implements DedicatedServerModInitializer {
 				Pik.LOGGER.error("Error while starting API server.");
 			}
 		});
+
+		ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
+			apiServer.stop();
+			OtpManager.INSTANCE.shutdown();
+		});
 	}
 }
