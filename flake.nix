@@ -15,11 +15,10 @@
       devShells.default = pkgs.mkShellNoCC {
         packages = [
           pkgs.jdt-language-server
-          pkgs.gradle
+          pkgs.gradle_9
           pkgs.jdk21
         ];
       };
     };
   });
 }
-
