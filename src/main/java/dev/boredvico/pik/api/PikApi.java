@@ -13,6 +13,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.network.chat.Style;
 import net.minecraft.server.players.NameAndId;
+import net.minecraft.server.players.PlayerList;
 import net.minecraft.server.players.UserWhiteListEntry;
 
 public class PikApi {
@@ -34,6 +35,7 @@ public class PikApi {
         ctx
             .getMinecraft()
             .execute(() -> {
+                PlayerList plist = server.getPlayerList();
                 ctx
                     .status(200)
                     .json(
@@ -41,7 +43,9 @@ public class PikApi {
                             "online",
                             true,
                             "playerCount",
-                            server.getPlayerList().getPlayerCount()
+                            plist.getPlayerCount(),
+                            "players",
+                            plist.getPlayerNamesArray()
                         )
                     );
             });
