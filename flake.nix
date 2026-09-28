@@ -16,7 +16,7 @@
         packages = [
           pkgs.jdt-language-server
           pkgs.gradle_9
-          pkgs.jdk21
+          pkgs.jdk25
         ];
       };
     };

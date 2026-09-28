@@ -1,6 +1,6 @@
 package dev.boredvico.pik.api;
 
-import com.mojang.authlib.yggdrasil.ProfileResult;
+import com.mojang.authlib.services.ProfileResult;
 import dev.boredvico.pik.OtpManager;
 import dev.boredvico.pik.Pik;
 import dev.boredvico.pik.api.ApiServer.Context;
