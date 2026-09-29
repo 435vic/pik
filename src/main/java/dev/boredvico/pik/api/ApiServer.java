@@ -2,7 +2,6 @@ package dev.boredvico.pik.api;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonParseException;
 import com.google.gson.JsonParser;
 import dev.boredvico.pik.Pik;
 import io.netty.bootstrap.ServerBootstrap;
@@ -13,7 +12,12 @@ import io.netty.channel.epoll.*;
 import io.netty.channel.unix.DomainSocketAddress;
 import io.netty.handler.codec.http.*;
 import io.netty.util.CharsetUtil;
+import java.io.IOException;
+import java.net.StandardProtocolFamily;
+import java.net.UnixDomainSocketAddress;
+import java.nio.channels.SocketChannel;
 import java.nio.file.*;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.*;
 import java.util.concurrent.ThreadFactory;
@@ -35,6 +39,7 @@ public class ApiServer {
     private final Router router;
     private final Gson gson;
     private final MinecraftServer mcInstance;
+    private boolean started;
 
     public ApiServer(
         String socketPath,
@@ -72,14 +77,14 @@ public class ApiServer {
             );
         }
 
+        Path path = Paths.get(socketPath);
+        prepareSocket(path);
+
         ThreadFactory threadFactory = new ThreadFactoryBuilder()
             .setNameFormat("Pik-API-Boss-%d")
             .setDaemon(true)
             .build();
         this.bossGroup = new EpollEventLoopGroup(1, threadFactory);
-
-        // Delete existing socket if present
-        Files.deleteIfExists(Paths.get(socketPath));
 
         ServerBootstrap bootstrap = new ServerBootstrap()
             .group(bossGroup)
@@ -103,10 +108,11 @@ public class ApiServer {
             .bind(new DomainSocketAddress(socketPath))
             .sync()
             .channel();
+        started = true;
 
         // Set socket permissions (owner+group read/write only)
         Files.setPosixFilePermissions(
-            Paths.get(socketPath),
+            path,
             PosixFilePermissions.fromString("rw-rw----")
         );
 
@@ -117,16 +123,57 @@ public class ApiServer {
         Pik.LOGGER.info("Shutting down API server...");
         if (channel != null) {
             channel.close();
+            channel = null;
         }
         if (bossGroup != null) {
             bossGroup.shutdownGracefully();
+            bossGroup = null;
         }
-        try {
-            Files.deleteIfExists(Paths.get(socketPath));
-        } catch (Exception e) {
-            e.printStackTrace();
+        if (started) {
+            try {
+                Files.deleteIfExists(Paths.get(socketPath));
+            } catch (Exception e) {
+                Pik.LOGGER.error("Failed to delete API socket {}", socketPath, e);
+            }
+            started = false;
         }
         Pik.LOGGER.info("API server stopped. bye bye");
+    }
+
+    private void prepareSocket(Path path) throws IOException {
+        Path parent = path.getParent();
+        if (parent != null) {
+            Files.createDirectories(parent);
+        }
+
+        if (!Files.exists(path)) {
+            return;
+        }
+
+        BasicFileAttributes attributes = Files.readAttributes(path, BasicFileAttributes.class);
+        if (!attributes.isOther()) {
+            throw new IllegalStateException(
+                "API socket path exists but is not a socket: " + path.toAbsolutePath()
+            );
+        }
+
+        if (isSocketActive(path)) {
+            throw new IllegalStateException(
+                "API socket is already bound by another instance: " + path.toAbsolutePath()
+            );
+        }
+
+        Pik.LOGGER.warn("Removing stale API socket {}", path.toAbsolutePath());
+        Files.delete(path);
+    }
+
+    private boolean isSocketActive(Path path) {
+        try (SocketChannel channel = SocketChannel.open(StandardProtocolFamily.UNIX)) {
+            channel.connect(UnixDomainSocketAddress.of(path));
+            return true;
+        } catch (IOException ignored) {
+            return false;
+        }
     }
 
     /**
